@@ -1,0 +1,166 @@
+# Casos de Teste - Banco de Dados Chave-Valor em Memória
+# Formato: Comandos seguidos da resposta esperada correspondente
+
+# ---------------------------------------------------------------------------
+# 1. Comandos Básicos (Chaves sem extensões)
+# ---------------------------------------------------------------------------
+ADD user_1 Alice
+# Esperado: OK
+GET user_1
+# Esperado: Alice
+
+ADD msg_boas_vindas Ola Mundo do Banco de Dados
+# Esperado: OK
+GET msg_boas_vindas
+# Esperado: Ola Mundo do Banco de Dados
+
+# Sobrescrita de valor na mesma chave
+ADD user_1 Roberto
+# Esperado: OK
+GET user_1
+# Esperado: Roberto
+
+# Chave inexistente
+GET chave_que_nao_existe
+# Esperado: ERRO: chave inexistente
+
+# ---------------------------------------------------------------------------
+# 2. Extensão: Validador de CPF (cpf.lua)
+# ---------------------------------------------------------------------------
+# Inserção válida e formatação no GET (000.000.000-00)
+ADD cpf_zezinho 12345678909
+# Esperado: OK
+GET cpf_zezinho
+# Esperado: 123.456.789-09
+
+ADD cpf_maria 52998224725
+# Esperado: OK
+GET cpf_maria
+# Esperado: 529.982.247-25
+
+# Regra de Unicidade: Rejeita mesmo CPF em chave diferente
+ADD cpf_outro_zezinho 12345678909
+# Esperado: ERRO: CPF já cadastrado na chave cpf_zezinho
+
+# Regra de Unicidade: Permite regravar o mesmo CPF na mesma chave
+ADD cpf_zezinho 12345678909
+# Esperado: OK
+GET cpf_zezinho
+# Esperado: 123.456.789-09
+
+# Rejeição de CPFs com dígitos repetidos (mesmo que passem no módulo 11)
+ADD cpf_rep1 11111111111
+# Esperado: ERRO: CPF inválido: dígitos repetidos
+
+ADD cpf_rep0 00000000000
+# Esperado: ERRO: CPF inválido: dígitos repetidos
+
+ADD cpf_rep9 99999999999
+# Esperado: ERRO: CPF inválido: dígitos repetidos
+
+# Rejeição de dígitos verificadores inválidos
+ADD cpf_invalido 12345678900
+# Esperado: ERRO: Dígito verificador do CPF inválido
+
+# Rejeição de CPF com pontuação na entrada (entrada deve ser estrita: apenas números)
+ADD cpf_com_pontos 123.456.789-09
+# Esperado: ERRO: CPF deve conter exatamente 11 dígitos numéricos sem formatação
+
+# Rejeição de tamanho incorreto ou caracteres inválidos
+ADD cpf_curto 1234567890
+# Esperado: ERRO: CPF deve conter exatamente 11 dígitos numéricos sem formatação
+
+ADD cpf_longo 123456789012
+# Esperado: ERRO: CPF deve conter exatamente 11 dígitos numéricos sem formatação
+
+ADD cpf_letras 1234567890a
+# Esperado: ERRO: CPF deve conter exatamente 11 dígitos numéricos sem formatação
+
+# ---------------------------------------------------------------------------
+# 3. Extensão: Formatador de Data (data.lua)
+# ---------------------------------------------------------------------------
+# Inserção válida e formatação no GET (DD/MM/AAAA)
+ADD data_nascimento_zezinho 2000-01-23
+# Esperado: OK
+GET data_nascimento_zezinho
+# Esperado: 23/01/2000
+
+ADD data_evento 2024-12-31
+# Esperado: OK
+GET data_evento
+# Esperado: 31/12/2024
+
+# Ano bissexto regular (divisível por 4)
+ADD data_bissexto_2024 2024-02-29
+# Esperado: OK
+GET data_bissexto_2024
+# Esperado: 29/02/2024
+
+# Ano de século bissexto (divisível por 400)
+ADD data_bissexto_2000 2000-02-29
+# Esperado: OK
+GET data_bissexto_2000
+# Esperado: 29/02/2000
+
+# Ano de século NÃO bissexto (divisível por 100, mas não por 400) -> Rejeita
+ADD data_nao_bissexto_1900 1900-02-29
+# Esperado: ERRO: dia inválido para o mês
+
+ADD data_nao_bissexto_2100 2100-02-29
+# Esperado: ERRO: dia inválido para o mês
+
+# Ano comum (não bissexto) -> Rejeita 29 de fevereiro
+ADD data_comum_2023 2023-02-29
+# Esperado: ERRO: dia inválido para o mês
+
+# Dias fora de faixa por mês: Abril tem 30 dias -> Rejeita 31
+ADD data_abril_31 2023-04-31
+# Esperado: ERRO: dia inválido para o mês
+
+# Mês fora de faixa (13 e 00)
+ADD data_mes_13 2023-13-01
+# Esperado: ERRO: mês inválido
+
+ADD data_mes_0 2023-00-10
+# Esperado: ERRO: mês inválido
+
+# Dia 00 ou dia acima de 31
+ADD data_dia_0 2023-05-00
+# Esperado: ERRO: dia inválido para o mês
+
+ADD data_dia_32 2023-01-32
+# Esperado: ERRO: dia inválido para o mês
+
+# Formatos frouxos sem zeros à esquerda -> Rejeita
+ADD data_frouxa1 2023-1-5
+# Esperado: ERRO: data deve estar no formato AAAA-MM-DD
+
+ADD data_frouxa2 23-01-2000
+# Esperado: ERRO: data deve estar no formato AAAA-MM-DD
+
+# ---------------------------------------------------------------------------
+# 4. Robustez do Parser e Tratamento de Erros de Sintaxe
+# ---------------------------------------------------------------------------
+# Comando desconhecido
+COMANDO_INVALIDO chave valor
+# Esperado: ERRO: comando desconhecido: COMANDO_INVALIDO
+
+# Comandos incompletos (argumentos faltantes)
+ADD
+# Esperado: ERRO: chave não informada
+
+ADD chave_sem_valor
+# Esperado: ERRO: valor não informado
+
+GET
+# Esperado: ERRO: chave não informada
+
+# Argumentos excessivos
+GET chave1 argumento_extra
+# Esperado: ERRO: número excessivo de argumentos
+
+EXIT argumento_extra
+# Esperado: ERRO: número excessivo de argumentos
+
+# Encerramento do programa
+EXIT
