@@ -170,6 +170,54 @@ Isso permite a busca contante da chave de um valor no método
 `get_key_by_value`, permitindo que vários registros compartilhem valores
 iguais mantendo a verificação de unicidade em tempo constante.
 
+## Extensão de Tema Livre: Manipulador de JSON (`json.lua`)
+
+Além das extensões obrigatórias de CPF e Data, foi desenvolvida a extensão
+[`extensions/json.lua`](extensions/json.lua) para o prefixo `json_`.
+
+### O que ela faz
+
+- **Inicialização / Sobrescrita no `ADD`**: Permite cadastrar objetos JSON
+  planos (`{"campo": valor, ...}`) com suporte nativo aos tipos básicos do
+  JSON:
+  - Strings (ex.: `"Alice"`, `"Sao Paulo"`).
+  - Números inteiros ou decimais (ex.: `30`, `-5.5`, `3.14`).
+  - Booleanos (`true`, `false`).
+- **Atualização Parcial Atômica e Idempotente (*Patching*) no `ADD`**:
+  - `@campo=valor`: Atualiza ou define um campo específico no documento JSON (ex.: `ADD json_user @age=31`).
+  - `+@campo=valor`: Adiciona ou define um campo de forma idempotente (ex.:
+    `ADD json_user +@city="Sao Paulo"`). Se a chave ainda não existir no banco,
+    inicializa o documento diretamente.
+  - `-@campo`: Remove um campo existente de forma idempotente (ex.: `ADD
+    json_user -@age`). Se o campo não existir (ou já tiver sido removido), a
+    operação não gera erro e mantém o estado consistente.
+- **Armazenamento Canônico**: O dado é persistido no banco em JSON minificado
+  determinístico com chaves ordenadas alfabeticamente.
+- **Formatação de Tabela no `GET`**: No `GET`, a extensão renderiza uma tabela ASCII formatada com colunas `CAMPO` e `VALOR`, bordas e chaves ordenadas:
+  ```text
+  +--------+-------------+
+  | CAMPO  | VALOR       |
+  +--------+-------------+
+  | active | true        |
+  | age    | 31          |
+  | city   | "Sao Paulo" |
+  | name   | "Alice"     |
+  +--------+-------------+
+  ```
+
+### Diferencial Técnico (O que exercita de novo)
+
+1. **Consulta sob Demanda com `ctx.get(ctx.key)` no `ADD`**: Para realizar o
+   *patch* parcial, a extensão consulta o banco em tempo real durante a
+   gravação para recuperar o estado anterior do documento, aplica a alteração
+   em memória no Lua e persiste o novo JSON serializado. Diferente do CPF (que
+   usa consulta reversa apenas para validação de unicidade), a extensão JSON
+   usa a consulta direta para **mutação e composição de estado**.
+2. **Manipulação Heterogênea de Tipos e Parser em Lua Puro**: Implementado
+   inteiramente sem bibliotecas externas, realizando validação sintática,
+   tipagem e serialização de estruturas compostas.
+3. **Casos de Teste Dedicados**: Versionado no arquivo [`casos_teste_json.txt`](casos_teste_json.txt).
+
 ## Módulos do Projeto e Dependências
 
 O único crate utilizado é o `mlua` e este é importado exclusivamente no módulo
@@ -181,12 +229,14 @@ tem conhecimento de que extensões em Lua existem.
 - **[`src/main.rs`](src/main.rs)**: Ponto de entrada do executável. Inicializa
   o armazenamento e o gerenciador de extensões, executa o loop e despacha
   a execução dos comandos.
+- **[`src/error.rs`](src/error.rs)**: Responsabilidade de tipagem e estruturação de erros.
+  Define o enum `DatabaseError` e padroniza a formatação `ERRO: {motivo}` via trait `Display`.
 - **[`src/io.rs`](src/io.rs)**: Responsabilidade de entrada e saída. Detecta terminais
   interativos, exibe prompts e formata as saídas de sucesso (`OK`), valores
   recuperados e mensagens de erro.
 - **[`src/parser.rs`](src/parser.rs)**: Responsável pela interpretação dos
   comandos do usuário. Processa linhas de entrada de texto puro e as transforma
-  no enum `Command` ou retorna erros sintáticos.
+  no enum `Command` ou retorna erros sintáticos `DatabaseError::Syntax`.
 - **[`src/storage.rs`](src/storage.rs)**: Armazenamento da aplicação.
   Gerencia o mapa de dados em memória e o índice secundário reverso
   `value_to_keys`.
@@ -203,6 +253,9 @@ graph TD
     Main --> Parser[parser.rs]
     Main --> Storage[storage.rs]
     Main --> ExtManager[extension_manager.rs]
+    Main --> Error[error.rs]
+    Parser --> Error
+    ExtManager --> Error
     ExtManager --> Storage
     ExtManager -.-> MLua[(mlua 0.12)]
     ExtManager -.-> ExtensionsDir[extensions/*.lua]

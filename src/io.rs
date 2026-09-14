@@ -25,11 +25,12 @@ pub fn print_value(value: &str) {
     println!("{}", value);
 }
 
-pub fn print_error(message: &str) {
-    let msg = message.trim();
+pub fn print_error(message: impl std::fmt::Display) {
+    let msg = message.to_string();
+    let msg = msg.trim();
     if msg.starts_with("ERRO:") {
-        println!("{}", msg);
+        println!("{msg}");
     } else {
-        println!("ERRO: {}", msg);
+        println!("ERRO: {msg}");
     }
 }

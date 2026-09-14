@@ -1,0 +1,182 @@
+# Casos de Teste - Extensão Proposta de Tema Livre: JSON (json.lua)
+# Prefixo: json_
+# Formato: Comandos seguidos da resposta esperada correspondente
+
+# ---------------------------------------------------------------------------
+# 1. Inserção Completa e Formatação de Tabela no GET
+# ---------------------------------------------------------------------------
+# Objeto plano com tipos string, number (inteiro) e boolean
+ADD json_user {"name": "Alice", "age": 30, "active": true}
+# Esperado: OK
+GET json_user
+# Esperado: +--------+---------+
+# Esperado: | CAMPO  | VALOR   |
+# Esperado: +--------+---------+
+# Esperado: | active | true    |
+# Esperado: | age    | 30      |
+# Esperado: | name   | "Alice" |
+# Esperado: +--------+---------+
+
+# Objeto plano com números decimais e negativos
+ADD json_metric {"count": 100, "temp": -5.5, "rate": 0.75}
+# Esperado: OK
+GET json_metric
+# Esperado: +-------+-------+
+# Esperado: | CAMPO | VALOR |
+# Esperado: +-------+-------+
+# Esperado: | count | 100   |
+# Esperado: | rate  | 0.75  |
+# Esperado: | temp  | -5.5  |
+# Esperado: +-------+-------+
+
+# Objeto JSON vazio
+ADD json_empty {}
+# Esperado: OK
+GET json_empty
+# Esperado: {}
+
+# ---------------------------------------------------------------------------
+# 2. Atualização Parcial Atômica e Idempotente (Patch) via Consulta no ADD
+# ---------------------------------------------------------------------------
+# Atualizar campo existente (@campo=valor)
+ADD json_user @age=31
+# Esperado: OK
+GET json_user
+# Esperado: +--------+---------+
+# Esperado: | CAMPO  | VALOR   |
+# Esperado: +--------+---------+
+# Esperado: | active | true    |
+# Esperado: | age    | 31      |
+# Esperado: | name   | "Alice" |
+# Esperado: +--------+---------+
+
+# Adicionar novo campo com string contendo espaços (+@campo=valor)
+ADD json_user +@city="Sao Paulo"
+# Esperado: OK
+GET json_user
+# Esperado: +--------+-------------+
+# Esperado: | CAMPO  | VALOR       |
+# Esperado: +--------+-------------+
+# Esperado: | active | true        |
+# Esperado: | age    | 31          |
+# Esperado: | city   | "Sao Paulo" |
+# Esperado: | name   | "Alice"     |
+# Esperado: +--------+-------------+
+
+# Alterar campo booleano
+ADD json_user @active=false
+# Esperado: OK
+GET json_user
+# Esperado: +--------+-------------+
+# Esperado: | CAMPO  | VALOR       |
+# Esperado: +--------+-------------+
+# Esperado: | active | false       |
+# Esperado: | age    | 31          |
+# Esperado: | city   | "Sao Paulo" |
+# Esperado: | name   | "Alice"     |
+# Esperado: +--------+-------------+
+
+# Remover campo existente (-@campo)
+ADD json_user -@age
+# Esperado: OK
+GET json_user
+# Esperado: +--------+-------------+
+# Esperado: | CAMPO  | VALOR       |
+# Esperado: +--------+-------------+
+# Esperado: | active | false       |
+# Esperado: | city   | "Sao Paulo" |
+# Esperado: | name   | "Alice"     |
+# Esperado: +--------+-------------+
+
+# Idempotência na remoção: remover novamente campo já inexistente não gera erro
+ADD json_user -@age
+# Esperado: OK
+GET json_user
+# Esperado: +--------+-------------+
+# Esperado: | CAMPO  | VALOR       |
+# Esperado: +--------+-------------+
+# Esperado: | active | false       |
+# Esperado: | city   | "Sao Paulo" |
+# Esperado: | name   | "Alice"     |
+# Esperado: +--------+-------------+
+
+# Idempotência na remoção: remover campo que nunca existiu no documento não gera erro
+ADD json_user -@campo_inexistente
+# Esperado: OK
+GET json_user
+# Esperado: +--------+-------------+
+# Esperado: | CAMPO  | VALOR       |
+# Esperado: +--------+-------------+
+# Esperado: | active | false       |
+# Esperado: | city   | "Sao Paulo" |
+# Esperado: | name   | "Alice"     |
+# Esperado: +--------+-------------+
+
+# Idempotência na adição: adicionar campo existente com mesmo valor não gera erro
+ADD json_user +@city="Sao Paulo"
+# Esperado: OK
+GET json_user
+# Esperado: +--------+-------------+
+# Esperado: | CAMPO  | VALOR       |
+# Esperado: +--------+-------------+
+# Esperado: | active | false       |
+# Esperado: | city   | "Sao Paulo" |
+# Esperado: | name   | "Alice"     |
+# Esperado: +--------+-------------+
+
+# Idempotência em chave nova: patch cria o documento diretamente
+ADD json_novo +@status="ativo"
+# Esperado: OK
+GET json_novo
+# Esperado: +--------+---------+
+# Esperado: | CAMPO  | VALOR   |
+# Esperado: +--------+---------+
+# Esperado: | status | "ativo" |
+# Esperado: +--------+---------+
+
+# ---------------------------------------------------------------------------
+# 3. Sobrescrita Total de Documento JSON
+# ---------------------------------------------------------------------------
+ADD json_user {"name": "Bob", "role": "Admin"}
+# Esperado: OK
+GET json_user
+# Esperado: +-------+---------+
+# Esperado: | CAMPO | VALOR   |
+# Esperado: +-------+---------+
+# Esperado: | name  | "Bob"   |
+# Esperado: | role  | "Admin" |
+# Esperado: +-------+---------+
+
+# ---------------------------------------------------------------------------
+# 4. Entradas Inválidas e Rejeições no ADD
+# ---------------------------------------------------------------------------
+# Chave sem aspas duplas
+ADD json_bad1 {name: "Alice"}
+# Esperado: ERRO: chave do JSON deve estar entre aspas duplas
+
+# Delimitadores incorretos (não abre ou fecha com chaves)
+ADD json_bad2 "name": "Alice"
+# Esperado: ERRO: valor deve ser um objeto JSON '{...}' ou um comando de atualização (@campo=valor, +@campo=valor, -@campo)
+
+# Tipo de valor inválido (sem aspas e não numérico/booleano)
+ADD json_bad3 {"age": valor_sem_aspas}
+# Esperado: ERRO: tipo de valor inválido ou não suportado (permitidos: string entre aspas, number ou boolean)
+
+# String com aspas não fechadas
+ADD json_bad4 {"name": "Alice}
+# Esperado: ERRO: string com aspas não fechadas
+
+# Sintaxe inválida de atualização
+ADD json_user @
+# Esperado: ERRO: sintaxe de atualização inválida (use @campo=valor, +@campo=valor ou -@campo)
+
+# Valor inválido no patch
+ADD json_user @idade=valor_sem_aspas
+# Esperado: ERRO: valor inválido no patch: tipo de valor inválido ou não suportado (permitidos: string entre aspas, number ou boolean)
+
+# Chave inexistente no GET
+GET json_nao_cadastrado
+# Esperado: ERRO: chave inexistente
+
+# Encerramento do programa
+EXIT

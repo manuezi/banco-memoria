@@ -1,3 +1,4 @@
+mod error;
 mod extension_manager;
 mod io;
 mod parser;
@@ -6,7 +7,9 @@ mod storage;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::{extension_manager::ExtensionManager, parser::Command, storage::Storage};
+use crate::{
+    error::DatabaseError, extension_manager::ExtensionManager, parser::Command, storage::Storage,
+};
 
 fn main() {
     let ext_manager = ExtensionManager::load("extensions");
@@ -17,7 +20,7 @@ fn main() {
             Ok(Some(i)) => i,
             Ok(None) => break,
             Err(e) => {
-                io::print_error(&e.to_string());
+                io::print_error(DatabaseError::from(e));
                 continue;
             }
         };
@@ -76,7 +79,7 @@ fn main() {
                         }
                     }
                     None => {
-                        io::print_error("chave inexistente");
+                        io::print_error(DatabaseError::NotFound);
                     }
                 }
             }
